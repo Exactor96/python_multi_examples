@@ -1,43 +1,50 @@
-from tasks import *
-from concurrent.futures import ProcessPoolExecutor
-import os
-from random import randint
-from decos import timeit
-from pickle import dump, load
-import time
-import sys
 import argparse
+import os
+import time
+from concurrent.futures import ProcessPoolExecutor
+from random import randint
 
+from decos import timeit
+from tasks import collect_all_hrefs, make_random_image
 
-URLS_LIST = ['http://google.com/favicon.ico']
-# NUMBER_LIST = [randint(-10 ** 6, 10 ** 6) for i in range(5000)]
-NUMBER_LIST = load(open('NUMLIST.obj', 'rb'))
+URLS_LIST = [
+    'http://facebook.com/',
+    'http://yandex.ru/',
+    'http://vk.com/',
+    'http://wikipedia.org/'
+]
 
 TIMES = None
 MAX_WORKERS = None
 
 
 @timeit(supress_output=True)
-def download_urls_multi():
+def collect_hrefs_urls_multi():
     tpe = ProcessPoolExecutor(max_workers=MAX_WORKERS)
-    results = tpe.map(url_download, URLS_LIST * TIMES)
-    return results
+    results = tpe.map(collect_all_hrefs, URLS_LIST)
+    return [result for result in results]
 
 
 @timeit()
-def download_urls_single():
-    for i in range(TIMES):
+def collect_hrefs_urls_single():
+    for i in range(len(URLS_LIST)):
         start = time.monotonic()
-        url_download(URLS_LIST[0])
-        print(f'Iteration #{i} - {time.monotonic() - start} s') 
+        collect_all_hrefs(URLS_LIST[i])
+        duration = time.monotonic() - start
+        print(f'Iteration #{i} - {duration} s')
+
+
+def handler_for_make_random_image(name: str):
+    """This is handler for make_random_image. ProcessPoolExecutor can't pickle lambda"""
+    return make_random_image(1000, 1000, name)
 
 
 @timeit(supress_output=True)
-def cpu_hard_function_multi():
+def make_random_image_multi():
     tpe = ProcessPoolExecutor(max_workers=os.cpu_count())
-    results = tpe.map(cpu_hard_function, [NUMBER_LIST for i in range(TIMES)])
+    results = tpe.map(handler_for_make_random_image,
+                      [str(i + 1) for i in range(TIMES)])
     result_list = []
-
     for result in results:
         result_list.append(result)
 
@@ -45,28 +52,27 @@ def cpu_hard_function_multi():
 
 
 @timeit()
-def cpu_hard_function_single():
+def make_random_image_single():
     for i in range(TIMES):
         start = time.monotonic()
-        cpu_hard_function(NUMBER_LIST)
-        print(f'Iteration #{i} - {time.monotonic() - start} s') 
+        make_random_image(1000, 1000, str(i))
+        print(f'Iteration #{i} - {time.monotonic() - start} s')
 
 
 def main():
-    cpu_hard_function_multi()
-    cpu_hard_function_single()
-    
-    download_urls_multi()
-    download_urls_single()
+    make_random_image_multi()
+    make_random_image_single()
+
+    collect_hrefs_urls_multi()
+    collect_hrefs_urls_single()
 
 
 if __name__ == "__main__":
-
-    parser = argparse.ArgumentParser(description='ProcessPoolExecutor')
+    parser = argparse.ArgumentParser(description='ThreadPoolExecutor')
     parser.add_argument('--workers', metavar='WORKERS', type=int,
-                    help='set number of workers for ProcessPoolExecutor')
-    parser.add_argument('--times',  metavar='TIMES', type=int,
-                    help='run N times function')
+                        help='set number of workers for ThreadPoolExecutor')
+    parser.add_argument('--times', metavar='TIMES', type=int,
+                        help='run N times for generate image function')
 
     args = parser.parse_args()
 
@@ -75,6 +81,6 @@ if __name__ == "__main__":
 
     print('-' * 10, 'Start Test!', '-' * 10)
     print(f'[*] Workers: {MAX_WORKERS}')
-    print(f'[*] Times: {TIMES}')
+    print(f'[*] Times: {TIMES}', '\n')
     main()
     print('-' * 10, 'End Test!', '-' * 10)
